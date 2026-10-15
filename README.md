@@ -4,7 +4,7 @@
 
 ## Package and compatibility
 
-`Robentex.Fanuc.OpcUa` version 1.0.0 targets `net9.0`. It is intended for applications that
+`Robentex.Fanuc.OpcUa` version 1.0.1 targets `net9.0`. It is intended for applications that
 communicate with FANUC controllers implementing the HMI Device Communication OPC UA option.
 Controller firmware, enabled options, endpoint URLs, security policies, and NodeIds are
 controller-specific and must be validated before deployment.
@@ -12,7 +12,7 @@ controller-specific and must be validated before deployment.
 Install the package in a .NET 9 application:
 
 ```powershell
-dotnet add package Robentex.Fanuc.OpcUa --version 1.0.0
+dotnet add package Robentex.Fanuc.OpcUa --version 1.0.1
 ```
 
 The package includes the library assembly, XML API documentation, this README, and the MIT license.
@@ -304,6 +304,89 @@ dotnet run --no-restore --project tests/Robentex.Fanuc.OpcUa.Console -- --test-r
 
 ```powershell
 dotnet run --no-restore --project tests/Robentex.Fanuc.OpcUa.Console -- --test-program-status --allow-insecure --task-number=1
+```
+
+### Read-only ARC BOOL diagnostic
+
+This diagnostic keeps one connection open. Each cycle reads the robot status snapshot,
+`PRG[1]` program status, `$AWEPOR[1].$ARC_ON`, then `$AWEPOR[1].$ARC_ENABLE`; the BOOL
+reads remain 500 ms apart. It prints the BOOL converted value, raw registers, dynamic
+address, SETASG command/status, and whether the command was served from the
+connection-scoped mapping cache. Stop it with Ctrl+C.
+
+Pass `--skip-robot-status` to omit `GetRobotStatusAsync()` or `--skip-program-status` to omit
+`ReadProgramStatusAsync(1)` while preserving the BOOL reads and their detailed logs. The flags can
+be combined to isolate the effect of the two calls.
+
+```powershell
+dotnet run --no-restore --project tests/Robentex.Fanuc.OpcUa.Console -- --test-arc-bool-diagnostics --allow-insecure
+dotnet run --no-restore --project tests/Robentex.Fanuc.OpcUa.Console -- --test-arc-bool-diagnostics --allow-insecure --skip-robot-status
+dotnet run --no-restore --project tests/Robentex.Fanuc.OpcUa.Console -- --test-arc-bool-diagnostics --allow-insecure --skip-program-status
+```
+
+### ROBOGUIDE-only status remap diagnostic
+
+This isolated read-only diagnostic checks whether a robot-status read affects the dynamic mapping for
+`$AWEPOR[1].$ARC_ENABLE`. It reads ARC_ENABLE, calls `GetRobotStatusAsync()`, reads ARC_ENABLE again,
+then clears only the current session's dynamic assignments and reads it once more to force a new SETASG.
+It requires an explicit local simulation confirmation and does not modify persistent `$SNPX_ASG` data.
+
+```powershell
+dotnet run --no-restore --project tests/Robentex.Fanuc.OpcUa.Console -- --test-status-remap --simulation --allow-insecure
+```
+
+To exclude `GetRobotStatusAsync()`'s in-memory conversion from the diagnosis, use the discovery-only
+variant below. `DiscoverRobotStatusNodesAsync()` currently combines address-space Browse with status-node
+`Value` and `DataType` reads, so the public API cannot yet split those two server operations further.
+
+```powershell
+dotnet run --no-restore --project tests/Robentex.Fanuc.OpcUa.Console -- --test-status-discovery-remap --simulation --allow-insecure
+```
+
+### ROBOGUIDE-only raw status-service remap diagnostic
+
+This deeper diagnostic uses the same client session to first Browse only the `RobotInformation` and
+`MotionDeviceSystem` trees, then—after a session-local remap—read only `Value` and `DataType` from
+explicit status NodeIds. Obtain the NodeIds with `--test-robot-status-discovery`; do not assume they are
+portable between controllers. Repeat `--status-node-id` for every node to include.
+
+```powershell
+dotnet run --no-restore --project tests/Robentex.Fanuc.OpcUa.Console -- --test-status-service-remap --simulation --allow-insecure --status-node-id="ns=1;i=123" --status-node-id="ns=1;i=124"
+```
+
+The test uses reflection only inside the Console diagnostic to access the current client session; it does
+not change the library API or write robot data.
+
+### ROBOGUIDE-only per-status-attribute remap diagnostic
+
+This test isolates each `Value` and `DataType` read for `OperationState`, `ServoState`, `ModeState`,
+`ProgramSpeed`, and `Alarm`. Before each individual read it recreates only the current session's ARC_ENABLE
+mapping, verifies it, reads the one status attribute, then reads ARC_ENABLE again. It ends with a Markdown
+summary table. All NodeIds are required and must be copied from the discovery output.
+
+```powershell
+dotnet run --no-restore --project tests/Robentex.Fanuc.OpcUa.Console -- --test-status-node-attribute-remap --simulation --allow-insecure "--operation-state-node-id=ns=1;i=123" "--servo-state-node-id=ns=1;i=124" "--mode-state-node-id=ns=1;i=125" "--program-speed-node-id=ns=1;i=126" "--alarm-node-id=ns=1;i=127"
+```
+
+### ROBOGUIDE-only ProgramSpeed/Alarm pre-read diagnostic
+
+This test reads `ProgramSpeed.Value` and `Alarm.Value` before creating the ARC_ENABLE dynamic mapping,
+then samples ARC_ENABLE three times at 500 ms intervals. It repeats the two status reads and samples
+ARC_ENABLE once more, allowing comparison of a status read made before versus after the mapping exists.
+
+```powershell
+dotnet run --no-restore --project tests/Robentex.Fanuc.OpcUa.Console -- --test-status-pre-read-remap --simulation --allow-insecure "--program-speed-node-id=ns=1;i=126" "--alarm-node-id=ns=1;i=127"
+```
+
+### ROBOGUIDE-only same-address SETASG refresh diagnostic
+
+This diagnostic maps and verifies ARC_ENABLE, reads `ProgramSpeed.Value`, verifies the observed mapping
+failure, then sends the identical `SETASG` command to the same address without sending `CLRASG`. It reports
+whether the following ARC_ENABLE read is restored. The direct Command write is limited to the local
+simulation diagnostic and does not modify persistent `$SNPX_ASG` data.
+
+```powershell
+dotnet run --no-restore --project tests/Robentex.Fanuc.OpcUa.Console -- --test-status-setasg-refresh --simulation --allow-insecure "--program-speed-node-id=ns=1;i=126"
 ```
 
 ### Read-only R[] and PR[] tests

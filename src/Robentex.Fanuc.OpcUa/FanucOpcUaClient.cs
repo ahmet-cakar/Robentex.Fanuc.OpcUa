@@ -17,6 +17,9 @@ public sealed class FanucOpcUaClient : IFanucOpcUaClient
     private readonly Dictionary<string, TargetWriteLockEntry> _targetWriteLocks = new(StringComparer.Ordinal);
     private ISession? _session;
     private bool _dynamicAssignmentsInitialized;
+    // ProgramSpeed.Value and Alarm.Value reads on the observed ROBOGUIDE server invalidate
+    // this session's dynamic SETASG mappings without changing their configured addresses.
+    private bool _dynamicAssignmentsNeedRefresh;
     private int _disposed;
     private volatile FanucOpcUaConnectionState _state;
 
@@ -172,10 +175,30 @@ public sealed class FanucOpcUaClient : IFanucOpcUaClient
         DataValueCollection? values = null;
         if (readValues.Count > 0)
         {
-            var response = await session.ReadAsync(null, 0, TimestampsToReturn.Neither, readValues, cancellationToken).ConfigureAwait(false);
-            values = response.Results;
-            if (values.Count != readValues.Count)
-                throw new FanucOpcUaConnectionException("Robot-status discovery returned an unexpected number of OPC UA read results.");
+            var invalidatesDynamicAssignments = StatusValueReadInvalidatesDynamicAssignments(found.Select(item => item.Name));
+            if (invalidatesDynamicAssignments)
+                await _mappingGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+            try
+            {
+                // Resolve again while holding the mapping gate so DisconnectAsync cannot dispose
+                // the session between the mapping-sensitive status read and its invalidation mark.
+                var readSession = invalidatesDynamicAssignments ? GetConnectedSession() : session;
+                var response = await readSession.ReadAsync(null, 0, TimestampsToReturn.Neither, readValues, cancellationToken).ConfigureAwait(false);
+                values = response.Results;
+                if (values.Count != readValues.Count)
+                    throw new FanucOpcUaConnectionException("Robot-status discovery returned an unexpected number of OPC UA read results.");
+            }
+            finally
+            {
+                if (invalidatesDynamicAssignments)
+                {
+                    // Be conservative when the service faults or is cancelled: the server may still
+                    // have processed the Value read, so require SETASG replay before mapped I/O.
+                    _dynamicAssignmentsNeedRefresh = true;
+                    _mappingGate.Release();
+                }
+            }
         }
 
         var results = new List<FanucRobotStatusNode>(requested.Length);
@@ -246,6 +269,7 @@ public sealed class FanucOpcUaClient : IFanucOpcUaClient
             _dynamicAssignments.Clear();
             _automaticAssignments.Clear();
             _dynamicAssignmentsInitialized = true;
+            _dynamicAssignmentsNeedRefresh = false;
         }
         finally { _mappingGate.Release(); }
     }
@@ -581,6 +605,8 @@ public sealed class FanucOpcUaClient : IFanucOpcUaClient
         await _mappingGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            await EnsureDynamicAssignmentsInitializedLockedAsync(cancellationToken).ConfigureAwait(false);
+            await RefreshDynamicAssignmentsIfNeededLockedAsync(cancellationToken).ConfigureAwait(false);
             if (_automaticAssignments.TryGetValue(key, out var assignment))
                 return (assignment, DynamicAssignmentConfigurationResult.Cached);
 
@@ -719,6 +745,7 @@ public sealed class FanucOpcUaClient : IFanucOpcUaClient
             _dynamicAssignments.Clear();
             _automaticAssignments.Clear();
             _dynamicAssignmentsInitialized = false;
+            _dynamicAssignmentsNeedRefresh = false;
             _mappingGate.Release();
         }
     }
@@ -887,24 +914,30 @@ public sealed class FanucOpcUaClient : IFanucOpcUaClient
         if (startAddress < 1 || registers.Count < 1 || startAddress + registers.Count - 1 > 16384)
             throw new ArgumentOutOfRangeException(nameof(startAddress), "Holding Register addresses must be in the range 1 through 16384.");
 
-        var session = GetConnectedSession();
-        var firstIndex = startAddress - 1;
-        var indexRange = CreateHoldingRegisterIndexRange(firstIndex, registers.Count);
-        var response = await session.WriteAsync(
-            null,
-            new WriteValueCollection
-            {
-                new WriteValue
+        await _mappingGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await RefreshDynamicAssignmentsIfNeededLockedAsync(cancellationToken).ConfigureAwait(false);
+            var session = GetConnectedSession();
+            var firstIndex = startAddress - 1;
+            var indexRange = CreateHoldingRegisterIndexRange(firstIndex, registers.Count);
+            var response = await session.WriteAsync(
+                null,
+                new WriteValueCollection
                 {
-                    NodeId = NodeId.Parse(_options.HoldingRegistersNodeId),
-                    AttributeId = Attributes.Value,
-                    IndexRange = indexRange,
-                    Value = new DataValue(registers.ToArray())
-                }
-            },
-            cancellationToken).ConfigureAwait(false);
+                    new WriteValue
+                    {
+                        NodeId = NodeId.Parse(_options.HoldingRegistersNodeId),
+                        AttributeId = Attributes.Value,
+                        IndexRange = indexRange,
+                        Value = new DataValue(registers.ToArray())
+                    }
+                },
+                cancellationToken).ConfigureAwait(false);
 
-        return EnsureGoodResult(response.Results, $"Writing Holding Registers {startAddress}-{startAddress + registers.Count - 1} was rejected.");
+            return EnsureGoodResult(response.Results, $"Writing Holding Registers {startAddress}-{startAddress + registers.Count - 1} was rejected.");
+        }
+        finally { _mappingGate.Release(); }
     }
 
     private async Task<short[]> ReadHoldingRegistersAsync(int startAddress, int count, CancellationToken cancellationToken)
@@ -912,38 +945,44 @@ public sealed class FanucOpcUaClient : IFanucOpcUaClient
         if (startAddress < 1 || count < 1 || startAddress + count - 1 > 16384)
             throw new ArgumentOutOfRangeException(nameof(startAddress), "Holding Register addresses must be in the range 1 through 16384.");
 
-        var session = GetConnectedSession();
-        var firstIndex = startAddress - 1; // FANUC address N is OPC UA array index N - 1.
-        var indexRange = CreateHoldingRegisterIndexRange(firstIndex, count);
-        var response = await session.ReadAsync(
-            null,
-            0,
-            TimestampsToReturn.Neither,
-            new ReadValueIdCollection
-            {
-                new ReadValueId
-                {
-                    NodeId = NodeId.Parse(_options.HoldingRegistersNodeId),
-                    AttributeId = Attributes.Value,
-                    IndexRange = indexRange
-                }
-            },
-            cancellationToken).ConfigureAwait(false);
-
-        if (response.Results.Count != 1 || !StatusCode.IsGood(response.Results[0].StatusCode))
-            throw new FanucOpcUaConnectionException($"Reading Holding Registers {startAddress}-{startAddress + count - 1} requires Good OPC UA status; received {response.Results.FirstOrDefault()?.StatusCode}.");
-
-        var value = response.Results[0].Value;
-        var registers = value switch
+        await _mappingGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            short[] array => array,
-            short single when count == 1 => [single],
-            _ => throw new FanucOpcUaConnectionException("The HoldingRegisters node did not return an Int16 array.")
-        };
+            await RefreshDynamicAssignmentsIfNeededLockedAsync(cancellationToken).ConfigureAwait(false);
+            var session = GetConnectedSession();
+            var firstIndex = startAddress - 1; // FANUC address N is OPC UA array index N - 1.
+            var indexRange = CreateHoldingRegisterIndexRange(firstIndex, count);
+            var response = await session.ReadAsync(
+                null,
+                0,
+                TimestampsToReturn.Neither,
+                new ReadValueIdCollection
+                {
+                    new ReadValueId
+                    {
+                        NodeId = NodeId.Parse(_options.HoldingRegistersNodeId),
+                        AttributeId = Attributes.Value,
+                        IndexRange = indexRange
+                    }
+                },
+                cancellationToken).ConfigureAwait(false);
 
-        if (registers.Length != count)
-            throw new FanucOpcUaConnectionException($"HoldingRegisters returned {registers.Length} values; {count} were requested.");
-        return registers;
+            if (response.Results.Count != 1 || !StatusCode.IsGood(response.Results[0].StatusCode))
+                throw new FanucOpcUaConnectionException($"Reading Holding Registers {startAddress}-{startAddress + count - 1} requires Good OPC UA status; received {response.Results.FirstOrDefault()?.StatusCode}.");
+
+            var value = response.Results[0].Value;
+            var registers = value switch
+            {
+                short[] array => array,
+                short single when count == 1 => [single],
+                _ => throw new FanucOpcUaConnectionException("The HoldingRegisters node did not return an Int16 array.")
+            };
+
+            if (registers.Length != count)
+                throw new FanucOpcUaConnectionException($"HoldingRegisters returned {registers.Length} values; {count} were requested.");
+            return registers;
+        }
+        finally { _mappingGate.Release(); }
     }
 
     internal static string CreateHoldingRegisterIndexRange(int firstIndex, int count) =>
@@ -1157,6 +1196,7 @@ public sealed class FanucOpcUaClient : IFanucOpcUaClient
     private async Task<DynamicAssignmentConfigurationResult> ConfigureDynamicAssignmentLockedAsync(FanucDynamicAssignment assignment, CancellationToken cancellationToken)
     {
         await EnsureDynamicAssignmentsInitializedLockedAsync(cancellationToken).ConfigureAwait(false);
+        await RefreshDynamicAssignmentsIfNeededLockedAsync(cancellationToken).ConfigureAwait(false);
         if (_options.ReservedHoldingRegisterRanges.Any(range => range.Overlaps(assignment)))
             throw new InvalidOperationException($"Dynamic assignment {assignment.StartAddress}-{assignment.EndAddress} overlaps a configured reserved Holding Register range.");
         if (_dynamicAssignments.Contains(assignment)) return DynamicAssignmentConfigurationResult.Cached;
@@ -1175,7 +1215,25 @@ public sealed class FanucOpcUaClient : IFanucOpcUaClient
         _dynamicAssignments.Clear();
         _automaticAssignments.Clear();
         _dynamicAssignmentsInitialized = true;
+        _dynamicAssignmentsNeedRefresh = false;
     }
+
+    private async Task RefreshDynamicAssignmentsIfNeededLockedAsync(CancellationToken cancellationToken)
+    {
+        if (!_dynamicAssignmentsNeedRefresh) return;
+
+        // Do not send CLRASG and do not mutate either cache: reapply each existing assignment
+        // at its recorded address so FANUC restores this session's mapping without reallocation.
+        foreach (var assignment in _dynamicAssignments)
+            await WriteCommandAsync(assignment.ToSetAsgCommand(), cancellationToken).ConfigureAwait(false);
+
+        // This is reached only when every SETASG returned Good; on any failure the flag remains
+        // set and the caller receives the WriteCommandAsync failure instead of reading/writing stale data.
+        _dynamicAssignmentsNeedRefresh = false;
+    }
+
+    internal static bool StatusValueReadInvalidatesDynamicAssignments(IEnumerable<string> nodeNames) =>
+        nodeNames.Any(name => string.Equals(name, "ProgramSpeed", StringComparison.Ordinal) || string.Equals(name, "Alarm", StringComparison.Ordinal));
 
     private int AllocateDynamicAddressLocked(int size) =>
         FindAvailableDynamicAddress(

@@ -6,13 +6,13 @@
     <Nullable>enable</Nullable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PackageId>Robentex.Fanuc.OpcUa</PackageId>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <Authors>Robentex</Authors>
     <Company>Robentex</Company>
     <Copyright>Copyright (c) 2026 Robentex</Copyright>
     <Description>Secure-by-default .NET 9 client library for FANUC OPC UA HMI Device Communication.</Description>
     <PackageTags>FANUC;OPC UA;robotics;industrial automation;HMI Device Communication</PackageTags>
-    <PackageReleaseNotes>Initial 1.0.0 release.</PackageReleaseNotes>
+    <PackageReleaseNotes>1.0.1: Refreshes connection-scoped dynamic SETASG mappings at their existing addresses after ProgramSpeed or Alarm status Value reads invalidate them on the observed ROBOGUIDE server; no CLRASG or address reallocation is used for the refresh.</PackageReleaseNotes>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageReadmeFile>README.md</PackageReadmeFile>
