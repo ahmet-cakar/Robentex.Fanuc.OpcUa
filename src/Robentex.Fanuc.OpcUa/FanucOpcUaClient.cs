@@ -20,15 +20,19 @@ public sealed class FanucOpcUaClient : IFanucOpcUaClient
     private int _disposed;
     private volatile FanucOpcUaConnectionState _state;
 
+    /// <summary>Initializes a client with caller-supplied or secure default connection options.</summary>
     public FanucOpcUaClient(FanucOpcUaConnectionOptions? options = null)
     {
         _options = options ?? new FanucOpcUaConnectionOptions();
         _options.Validate();
     }
 
+    /// <summary>Gets the current connection lifecycle state.</summary>
     public FanucOpcUaConnectionState State => _state;
+    /// <summary>Gets whether the underlying OPC UA session is currently connected.</summary>
     public bool IsConnected => _state == FanucOpcUaConnectionState.Connected && _session?.Connected == true;
 
+    /// <summary>Establishes an OPC UA session using the configured endpoint and security policy.</summary>
     public async Task ConnectAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
@@ -99,6 +103,7 @@ public sealed class FanucOpcUaClient : IFanucOpcUaClient
         finally { _gate.Release(); }
     }
 
+    /// <summary>Closes the current OPC UA session and clears its dynamic-assignment cache.</summary>
     public async Task DisconnectAsync(CancellationToken cancellationToken = default)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -266,6 +271,7 @@ public sealed class FanucOpcUaClient : IFanucOpcUaClient
         return new FanucSystemVariableReadResult<T>(value, registers, assignment.StartAddress, command, configuration.Status, configuration.CommandIssued);
     }
 
+    /// <summary>Automatically maps and reads a FANUC system variable as Int32, Single, or Boolean.</summary>
     public async Task<FanucSystemVariableReadResult<T>> ReadSystemVariableAsync<T>(string variableName, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(variableName);
@@ -593,6 +599,7 @@ public sealed class FanucOpcUaClient : IFanucOpcUaClient
         return result.Value;
     }
 
+    /// <summary>Synchronously closes the session and releases client resources.</summary>
     public void Dispose()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
@@ -609,6 +616,7 @@ public sealed class FanucOpcUaClient : IFanucOpcUaClient
         }
     }
 
+    /// <summary>Asynchronously closes the session and releases client resources.</summary>
     public async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
@@ -1353,7 +1361,11 @@ public sealed class FanucOpcUaClient : IFanucOpcUaClient
     internal static StatusCode EnsureGoodResult(StatusCodeCollection? results, string message)
     {
         if (results is null || results.Count != 1 || !StatusCode.IsGood(results[0]))
-            throw new FanucOpcUaConnectionException($"{message} A Good OPC UA status is required; received {results?.FirstOrDefault()}.");
+        {
+            var status = results is { Count: > 0 } ? results[0] : default;
+            var symbolicId = StatusCodes.LookupSymbolicId((uint)status) ?? "NoStatus";
+            throw new FanucOpcUaConnectionException($"{message} A Good OPC UA status is required; received {symbolicId} [{status}].");
+        }
         return results[0];
     }
 

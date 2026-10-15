@@ -3,9 +3,13 @@ namespace Robentex.Fanuc.OpcUa;
 /// <summary>Known textual FANUC robot operation modes. Numeric ModeState values remain available as raw data.</summary>
 public enum FanucRobotMode
 {
+    /// <summary>The controller mode was absent or could not be interpreted.</summary>
     Unknown,
+    /// <summary>Automatic operation mode.</summary>
     Auto,
+    /// <summary>Teach mode T1.</summary>
     T1,
+    /// <summary>Teach mode T2.</summary>
     T2
 }
 

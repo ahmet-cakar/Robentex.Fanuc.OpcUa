@@ -2,6 +2,34 @@
 
 .NET 9 FANUC OPC UA client library built on the official OPC Foundation .NET Standard stack.
 
+## Package and compatibility
+
+`Robentex.Fanuc.OpcUa` version 1.0.0 targets `net9.0`. It is intended for applications that
+communicate with FANUC controllers implementing the HMI Device Communication OPC UA option.
+Controller firmware, enabled options, endpoint URLs, security policies, and NodeIds are
+controller-specific and must be validated before deployment.
+
+Install the package in a .NET 9 application:
+
+```powershell
+dotnet add package Robentex.Fanuc.OpcUa --version 1.0.0
+```
+
+The package includes the library assembly, XML API documentation, this README, and the MIT license.
+It does not include the console application, unit tests, FANUC documentation, or OPC UA PKI material.
+
+## Safety and security
+
+The library is secure by default: a security-free OPC UA endpoint requires explicit opt-in, and an
+unknown server certificate is never automatically trusted. Dynamic Holding Register assignment is
+disabled until the caller confirms that its configured address range does not conflict with persistent
+`$SNPX_ASG` assignments or other clients.
+
+All robot writes are disabled by default. Enabling a write category requires both its opt-in setting and
+the corresponding explicit allow-list. A successful OPC UA write is followed by a read-back check, but
+FANUC does not document multi-register writes as controller-atomic. Validate every deployment with the
+controller owner and applicable machine-safety procedure.
+
 Before building, install these official packages in `src/Robentex.Fanuc.OpcUa`:
 
 ```powershell
@@ -296,3 +324,8 @@ verifies ON then OFF, and restores the original value in `finally`. It accepts `
 ```powershell
 dotnet run --no-restore --project tests/Robentex.Fanuc.OpcUa.Console -- --test-digital-output-write --simulation --allow-insecure --do-number=1
 ```
+
+## License
+
+This library is licensed under the [MIT License](LICENSE). FANUC documentation and controller software
+are not distributed with this package and remain subject to their respective license terms.

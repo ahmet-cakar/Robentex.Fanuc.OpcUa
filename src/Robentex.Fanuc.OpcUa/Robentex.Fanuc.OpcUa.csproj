@@ -4,7 +4,26 @@
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageId>Robentex.Fanuc.OpcUa</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Robentex</Authors>
+    <Company>Robentex</Company>
+    <Copyright>Copyright (c) 2026 Robentex</Copyright>
+    <Description>Secure-by-default .NET 9 client library for FANUC OPC UA HMI Device Communication.</Description>
+    <PackageTags>FANUC;OPC UA;robotics;industrial automation;HMI Device Communication</PackageTags>
+    <PackageReleaseNotes>Initial 1.0.0 release.</PackageReleaseNotes>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryType>git</RepositoryType>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\LICENSE" Pack="true" PackagePath="\" Link="LICENSE" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" Link="README.md" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="OPCFoundation.NetStandard.Opc.Ua.Client" Version="1.5.378.176" />

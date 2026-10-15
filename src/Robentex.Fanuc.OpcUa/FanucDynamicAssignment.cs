@@ -5,6 +5,7 @@ namespace Robentex.Fanuc.OpcUa;
 /// <summary>A connection-scoped FANUC Holding Registers dynamic assignment.</summary>
 public sealed record FanucDynamicAssignment(int StartAddress, int Size, string VariableName, decimal? Multiply = null)
 {
+    /// <summary>Gets the inclusive 1-based end address occupied by this assignment.</summary>
     public int EndAddress => checked(StartAddress + Size - 1);
 
     internal string ToSetAsgCommand()

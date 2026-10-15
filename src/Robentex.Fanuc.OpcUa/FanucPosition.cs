@@ -18,7 +18,9 @@ public sealed record FanucPosition(
     int? UserFrame = null,
     int? UserTool = null)
 {
+    /// <summary>Gets whether all six Cartesian components are specified.</summary>
     public bool HasCompleteCartesian => X.HasValue && Y.HasValue && Z.HasValue && W.HasValue && P.HasValue && R.HasValue;
+    /// <summary>Gets whether at least one Cartesian component is specified.</summary>
     public bool HasAnyCartesian => X.HasValue || Y.HasValue || Z.HasValue || W.HasValue || P.HasValue || R.HasValue;
 }
 

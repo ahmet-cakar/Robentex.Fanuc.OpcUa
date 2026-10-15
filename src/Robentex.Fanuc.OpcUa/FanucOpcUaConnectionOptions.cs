@@ -3,8 +3,11 @@ namespace Robentex.Fanuc.OpcUa;
 /// <summary>Connection settings for a FANUC OPC UA server.</summary>
 public sealed class FanucOpcUaConnectionOptions
 {
+    /// <summary>OPC UA endpoint to which the client connects.</summary>
     public Uri EndpointUrl { get; init; } = new("opc.tcp://127.0.0.1:4880");
+    /// <summary>Explicitly permits selection of a security-free endpoint; disabled by default.</summary>
     public bool AllowInsecureConnection { get; init; }
+    /// <summary>Application name presented during OPC UA session creation.</summary>
     public string ApplicationName { get; init; } = "Robentex.Fanuc.OpcUa.Client";
     /// <summary>OPC UA NodeId of the FANUC Command node.</summary>
     public string CommandNodeId { get; init; } = "ns=1;i=305";
@@ -15,7 +18,9 @@ public sealed class FanucOpcUaConnectionOptions
     /// $SNPX_ASG assignments and other client reservations. Disabled by default because the sample range is not universal.
     /// </summary>
     public bool DynamicAssignmentRangeVerified { get; init; }
+    /// <summary>First inclusive 1-based Holding Register address usable for automatic assignments.</summary>
     public int DynamicAssignmentStartAddress { get; init; } = 10001;
+    /// <summary>Last inclusive 1-based Holding Register address usable for automatic assignments.</summary>
     public int DynamicAssignmentEndAddress { get; init; } = 16384;
     /// <summary>Known occupied ranges that neither automatic nor manual dynamic SETASG assignments may use.</summary>
     public IReadOnlyList<FanucHoldingRegisterRange> ReservedHoldingRegisterRanges { get; init; } = [];
@@ -41,7 +46,9 @@ public sealed class FanucOpcUaConnectionOptions
         "Robentex",
         "FanucOpcUa",
         "pki");
+    /// <summary>Requested OPC UA session timeout.</summary>
     public TimeSpan SessionTimeout { get; init; } = TimeSpan.FromSeconds(60);
+    /// <summary>Timeout for endpoint selection and individual OPC UA operations.</summary>
     public TimeSpan OperationTimeout { get; init; } = TimeSpan.FromSeconds(15);
 
     internal void Validate()
