@@ -1,0 +1,60 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+
+# Visual Studio, Rider and local IDE state
+.vs/
+.idea/
+*.user
+*.rsuser
+*.suo
+*.userosscache
+*.sln.docstates
+*.sln.DotSettings.user
+_ReSharper*/
+*.[Rr]e[Ss]harper
+
+# Logs and test output
+*.log
+logs/
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+coverage/
+coverage*/
+
+# NuGet packages and generated package artifacts
+packages/
+.nuget/
+*.nupkg
+*.snupkg
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+secrets.json
+secrets.*.json
+*.secret
+*.secrets
+appsettings.Local.json
+appsettings.Development.json
+appsettings.*.local.json
+
+# Project-local OPC UA PKI and private key material
+pki/
+PKI/
+*.pfx
+*.p12
+*.pem
+*.key
+*.pvk
+
+# OS-generated files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Licensed FANUC reference manual; do not publish it with the repository
+/docs/Additional-Option-Manual.pdf
