@@ -4,7 +4,7 @@
 
 ## Package and compatibility
 
-`Robentex.Fanuc.OpcUa` version 1.0.1 targets `net9.0`. It is intended for applications that
+`Robentex.Fanuc.OpcUa` version 1.0.2 targets `net9.0`. It is intended for applications that
 communicate with FANUC controllers implementing the HMI Device Communication OPC UA option.
 Controller firmware, enabled options, endpoint URLs, security policies, and NodeIds are
 controller-specific and must be validated before deployment.
@@ -12,11 +12,18 @@ controller-specific and must be validated before deployment.
 Install the package in a .NET 9 application:
 
 ```powershell
-dotnet add package Robentex.Fanuc.OpcUa --version 1.0.1
+dotnet add package Robentex.Fanuc.OpcUa --version 1.0.2
 ```
 
 The package includes the library assembly, XML API documentation, this README, and the MIT license.
 It does not include the console application, unit tests, FANUC documentation, or OPC UA PKI material.
+
+## What's new in 1.0.2
+
+`ReadSystemVariableAsync<string>` reads FANUC STRING system variables through a 40-register,
+`MULTIPLY=1` dynamic mapping. The low-byte-first decoding and required NUL terminator follow Additional
+Option Manual §§55.3.1 and 55.3.8. Read-only operation was verified against `$RBTIF.SERIAL_NUM` in
+ROBOGUIDE; STRING writes are intentionally not supported.
 
 ## Safety and security
 
@@ -48,8 +55,14 @@ are not installed automatically by this repository.
 The library provides endpoint discovery, secure-by-default session creation, connection
 state observation, and synchronous/asynchronous disposal. It also supports connection-scoped
 `CLRASG`/`SETASG` dynamic assignments and read-only `$MCR.$GENOVERRIDE` validation through
-Holding Registers. It can also read INTEGER (`int`), REAL (`float`), and BOOLEAN (`bool`)
+Holding Registers. It can also read INTEGER (`int`), REAL (`float`), BOOLEAN (`bool`), and STRING (`string`)
 system variables with `ReadSystemVariableAsync<T>`, R[] and Cartesian PR[] values, plus DI[]/DO[] signals.
+
+For a STRING system variable, `ReadSystemVariableAsync<string>` creates a 40-register mapping with
+`MULTIPLY=1`, as specified by Additional Option Manual §§55.3.1 and 55.3.8. Each register contains two
+characters (low byte first), and the string must contain a NUL terminator. The manual does not specify a
+character code page; the library uses Latin-1 for a one-to-one byte mapping and rejects a missing terminator
+instead of silently treating an unterminated 80-byte buffer as a string. STRING writes are not supported.
 
 ## Digital I/O reads
 

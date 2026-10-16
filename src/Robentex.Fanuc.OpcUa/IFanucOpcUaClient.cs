@@ -21,9 +21,9 @@ public interface IFanucOpcUaClient : IDisposable, IAsyncDisposable
     Task ConfigureDynamicAssignmentAsync(FanucDynamicAssignment assignment, CancellationToken cancellationToken = default);
     /// <summary>Reads the signed INTEGER value of <c>$MCR.$GENOVERRIDE</c>.</summary>
     Task<int> ReadGeneralOverrideAsync(CancellationToken cancellationToken = default);
-    /// <summary>Automatically maps and reads an INTEGER, REAL, or BOOLEAN system variable.</summary>
+    /// <summary>Automatically maps and reads an INTEGER, REAL, BOOLEAN, or STRING system variable.</summary>
     Task<FanucSystemVariableReadResult<T>> ReadSystemVariableAsync<T>(string variableName, CancellationToken cancellationToken = default);
-    /// <summary>Maps and reads an INTEGER, REAL, or BOOLEAN system variable at an explicit address.</summary>
+    /// <summary>Maps and reads an INTEGER, REAL, BOOLEAN, or STRING system variable at an explicit address.</summary>
     Task<FanucSystemVariableReadResult<T>> ReadSystemVariableAsync<T>(string variableName, int startAddress, CancellationToken cancellationToken = default);
     /// <summary>Writes an allow-listed system variable and verifies its raw register read-back.</summary>
     Task<FanucSystemVariableWriteResult<T>> WriteSystemVariableAsync<T>(string variableName, T value, CancellationToken cancellationToken = default);

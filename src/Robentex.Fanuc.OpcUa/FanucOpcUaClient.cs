@@ -280,7 +280,7 @@ public sealed class FanucOpcUaClient : IFanucOpcUaClient
         await ConfigureDynamicAssignmentCoreAsync(assignment, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>Maps and reads a FANUC system variable as Int32, Single, or Boolean.</summary>
+    /// <summary>Maps and reads a FANUC system variable as Int32, Single, Boolean, or String.</summary>
     public async Task<FanucSystemVariableReadResult<T>> ReadSystemVariableAsync<T>(
         string variableName,
         int startAddress,
@@ -295,7 +295,7 @@ public sealed class FanucOpcUaClient : IFanucOpcUaClient
         return new FanucSystemVariableReadResult<T>(value, registers, assignment.StartAddress, command, configuration.Status, configuration.CommandIssued);
     }
 
-    /// <summary>Automatically maps and reads a FANUC system variable as Int32, Single, or Boolean.</summary>
+    /// <summary>Automatically maps and reads a FANUC system variable as Int32, Single, Boolean, or String.</summary>
     public async Task<FanucSystemVariableReadResult<T>> ReadSystemVariableAsync<T>(string variableName, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(variableName);
@@ -1007,12 +1007,19 @@ public sealed class FanucOpcUaClient : IFanucOpcUaClient
             return new FanucDynamicAssignment(startAddress, 2, variableName);
         if (typeof(T) == typeof(float))
             return new FanucDynamicAssignment(startAddress, 2, variableName, 0m);
+        if (typeof(T) == typeof(string))
+            // FANUC §55.3.8: STRING uses 40 Holding Registers. §55.3.1 defines
+            // MULTIPLY=1 as low-byte-first character order.
+            return new FanucDynamicAssignment(startAddress, 40, variableName, 1m);
 
-        throw new NotSupportedException($"System-variable type '{typeof(T).FullName}' is not supported. Supported types are Int32, Single, and Boolean.");
+        throw new NotSupportedException($"System-variable type '{typeof(T).FullName}' is not supported. Supported types are Int32, Single, Boolean, and String.");
     }
 
     private static T ConvertSystemVariable<T>(IReadOnlyList<short> registers, string variableName)
     {
+        if (typeof(T) == typeof(string))
+            return (T)(object)DecodeSystemVariableString(registers, variableName);
+
         if (registers.Count != 2)
             throw new FanucOpcUaConnectionException($"System variable '{variableName}' returned {registers.Count} registers; exactly two are required.");
 
@@ -1032,7 +1039,16 @@ public sealed class FanucOpcUaClient : IFanucOpcUaClient
             return (T)(object)(intValue == 1);
         }
 
-        throw new NotSupportedException($"System-variable type '{typeof(T).FullName}' is not supported.");
+        throw new NotSupportedException($"System-variable type '{typeof(T).FullName}' is not supported. Supported types are Int32, Single, Boolean, and String.");
+    }
+
+    internal static string DecodeSystemVariableString(IReadOnlyList<short> registers, string variableName)
+    {
+        const int requiredRegisterCount = 40;
+        if (registers.Count != requiredRegisterCount)
+            throw new FanucOpcUaConnectionException($"STRING system variable '{variableName}' returned {registers.Count} registers; FANUC §55.3.8 requires exactly {requiredRegisterCount}.");
+
+        return DecodeMultiplyOneString(registers, 0, requiredRegisterCount, $"STRING system variable '{variableName}'", requireNullTerminator: true);
     }
 
     private static FanucProgramStatus ConvertProgramStatus(IReadOnlyList<short> registers, int taskNumber)
@@ -1056,7 +1072,7 @@ public sealed class FanucOpcUaClient : IFanucOpcUaClient
             DecodeMultiplyOneString(registers, 10, 8, $"PRG[{taskNumber}] parent program name"));
     }
 
-    private static string DecodeMultiplyOneString(IReadOnlyList<short> registers, int offset, int registerCount, string fieldName)
+    private static string DecodeMultiplyOneString(IReadOnlyList<short> registers, int offset, int registerCount, string fieldName, bool requireNullTerminator = false)
     {
         if (offset < 0 || registerCount < 1 || offset + registerCount > registers.Count)
             throw new ArgumentOutOfRangeException(nameof(offset), $"{fieldName} register range is invalid.");
@@ -1071,7 +1087,15 @@ public sealed class FanucOpcUaClient : IFanucOpcUaClient
         }
 
         var length = Array.IndexOf(bytes, (byte)0);
-        if (length < 0) length = bytes.Length;
+        if (length < 0)
+        {
+            if (requireNullTerminator)
+                throw new FanucOpcUaConnectionException($"{fieldName} has no NUL terminator. FANUC §55.3.1 requires STRING data to end with byte 0.");
+            length = bytes.Length;
+        }
+
+        // FANUC does not specify a character code page. Latin-1 provides a one-to-one byte mapping,
+        // preserving every non-NUL controller byte without replacement-character data loss.
         return System.Text.Encoding.Latin1.GetString(bytes, 0, length);
     }
 
@@ -1087,7 +1111,7 @@ public sealed class FanucOpcUaClient : IFanucOpcUaClient
             rawValue = BitConverter.SingleToInt32Bits(floatValue);
         }
         else if (typeof(T) == typeof(bool)) rawValue = (bool)(object)value! ? 1 : 0;
-        else throw new NotSupportedException($"System-variable type '{typeof(T).FullName}' is not supported. Supported types are Int32, Single, and Boolean.");
+        else throw new NotSupportedException($"System-variable type '{typeof(T).FullName}' is not supported for system-variable writes. Supported write types are Int32, Single, and Boolean; STRING is read-only in this API.");
 
         return [unchecked((short)rawValue), unchecked((short)(rawValue >> 16))];
     }

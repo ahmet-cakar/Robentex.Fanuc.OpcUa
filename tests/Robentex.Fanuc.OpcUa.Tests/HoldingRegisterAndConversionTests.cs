@@ -42,6 +42,38 @@ public sealed class HoldingRegisterAndConversionTests
         Assert.Equal(-1, FanucOpcUaClient.CombineInt16ToInt32(-1, -1));
     }
 
+    [Fact]
+    public void SystemVariableString_Decodes_LowByteFirst_AndStopsAtNul()
+    {
+        var registers = new short[40];
+        registers[0] = unchecked((short)0x4241); // A, B
+        registers[1] = unchecked((short)0x0043); // C, NUL
+
+        var value = FanucOpcUaClient.DecodeSystemVariableString(registers, "$RBTIF.SERIAL_NUM");
+
+        Assert.Equal("ABC", value);
+    }
+
+    [Fact]
+    public void SystemVariableString_Rejects_MissingNulTerminator()
+    {
+        var registers = Enumerable.Repeat(unchecked((short)0x4141), 40).ToArray();
+
+        var exception = Assert.Throws<FanucOpcUaConnectionException>(() =>
+            FanucOpcUaClient.DecodeSystemVariableString(registers, "$RBTIF.SERIAL_NUM"));
+
+        Assert.Contains("NUL terminator", exception.Message);
+    }
+
+    [Fact]
+    public void SystemVariableString_Requires_FortyRegisters()
+    {
+        var exception = Assert.Throws<FanucOpcUaConnectionException>(() =>
+            FanucOpcUaClient.DecodeSystemVariableString(new short[39], "$RBTIF.SERIAL_NUM"));
+
+        Assert.Contains("exactly 40", exception.Message);
+    }
+
     [Theory]
     [InlineData(10.25)]
     [InlineData(-35.75)]

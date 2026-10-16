@@ -7,6 +7,7 @@ const string Override = "$MCR.$GENOVERRIDE";
 const string Amps = "$AWEPOR[1].$AMPS_FDBK";
 const string ArcOn = "$AWEPOR[1].$ARC_ON";
 const string ArcEnable = "$AWEPOR[1].$ARC_ENABLE";
+const string RobotSerialNumber = "$RBTIF.SERIAL_NUM";
 const int TestRegisterNumber = 100;
 const int DefaultTestPositionRegisterNumber = 100;
 
@@ -34,6 +35,7 @@ var testStatusNodeAttributeRemap = args.Any(arg => string.Equals(arg, "--test-st
 var testStatusPreReadRemap = args.Any(arg => string.Equals(arg, "--test-status-pre-read-remap", StringComparison.OrdinalIgnoreCase));
 var testStatusSetAsgRefresh = args.Any(arg => string.Equals(arg, "--test-status-setasg-refresh", StringComparison.OrdinalIgnoreCase));
 var testMixedMonitoring = args.Any(arg => string.Equals(arg, "--test-mixed-monitoring", StringComparison.OrdinalIgnoreCase));
+var testSystemStringRead = args.Any(arg => string.Equals(arg, "--test-system-string-read", StringComparison.OrdinalIgnoreCase));
 var skipRobotStatus = args.Any(arg => string.Equals(arg, "--skip-robot-status", StringComparison.OrdinalIgnoreCase));
 var skipProgramStatus = args.Any(arg => string.Equals(arg, "--skip-program-status", StringComparison.OrdinalIgnoreCase));
 var simulationConfirmed = args.Any(arg => string.Equals(arg, "--simulation", StringComparison.OrdinalIgnoreCase));
@@ -79,6 +81,17 @@ if (testPositionConfigRead)
 if (testRegisterRead)
 {
     return await TestRegisterReadAsync(endpointUri, allowInsecure, registerNumber);
+}
+
+if (testSystemStringRead)
+{
+    if (!simulationConfirmed || !allowInsecure || !IsLoopback(endpointUri))
+    {
+        Console.Error.WriteLine("System STRING read test is blocked. It requires --simulation --allow-insecure and a loopback endpoint (127.0.0.1, localhost, or ::1).");
+        return 2;
+    }
+
+    return await TestSystemStringReadAsync(endpointUri);
 }
 
 if (testPositionRead)
@@ -400,6 +413,31 @@ static async Task<int> TestRegisterReadAsync(Uri endpoint, bool allowInsecure, i
     catch (Exception exception)
     {
         Console.Error.WriteLine($"R[] read test failed: {exception.Message}");
+        return 1;
+    }
+    finally
+    {
+        if (client.IsConnected) await client.DisconnectAsync();
+    }
+}
+
+static async Task<int> TestSystemStringReadAsync(Uri endpoint)
+{
+    await using var client = new FanucOpcUaClient(Options(endpoint, allowInsecure: true));
+    try
+    {
+        Console.WriteLine($"SIMULATION-ONLY read-only STRING system-variable test started for {RobotSerialNumber}.");
+        await client.ConnectAsync();
+        var result = await client.ReadSystemVariableAsync<string>(RobotSerialNumber);
+        Console.WriteLine($"Value='{result.Value}'");
+        Console.WriteLine($"RegisterCount={result.Registers.Count}; Registers=[{string.Join(", ", result.Registers)}]");
+        Console.WriteLine($"StartAddress={result.StartAddress}; Cached={!result.SetAsgIssued}; SetAsgStatus={result.SetAsgStatus}");
+        Console.WriteLine($"SetAsgCommand='{result.SetAsgCommand}'");
+        return 0;
+    }
+    catch (Exception exception)
+    {
+        Console.Error.WriteLine($"STRING system-variable read failed for {RobotSerialNumber}: {exception.GetType().Name}: {exception.Message}");
         return 1;
     }
     finally

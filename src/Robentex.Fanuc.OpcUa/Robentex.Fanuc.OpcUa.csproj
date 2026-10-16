@@ -6,13 +6,13 @@
     <Nullable>enable</Nullable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PackageId>Robentex.Fanuc.OpcUa</PackageId>
-    <Version>1.0.1</Version>
+    <Version>1.0.2</Version>
     <Authors>Robentex</Authors>
     <Company>Robentex</Company>
     <Copyright>Copyright (c) 2026 Robentex</Copyright>
     <Description>Secure-by-default .NET 9 client library for FANUC OPC UA HMI Device Communication.</Description>
     <PackageTags>FANUC;OPC UA;robotics;industrial automation;HMI Device Communication</PackageTags>
-    <PackageReleaseNotes>1.0.1: Refreshes connection-scoped dynamic SETASG mappings at their existing addresses after ProgramSpeed or Alarm status Value reads invalidate them on the observed ROBOGUIDE server; no CLRASG or address reallocation is used for the refresh.</PackageReleaseNotes>
+    <PackageReleaseNotes>1.0.2: Adds ReadSystemVariableAsync&lt;string&gt; support for FANUC STRING system variables using a 40-register, MULTIPLY=1 dynamic SETASG mapping, low-byte-first decoding, and required NUL termination validation. Verified read-only with $RBTIF.SERIAL_NUM on ROBOGUIDE.</PackageReleaseNotes>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageReadmeFile>README.md</PackageReadmeFile>
