@@ -10,13 +10,15 @@
     <Authors>Robentex</Authors>
     <Company>Robentex</Company>
     <Copyright>Copyright (c) 2026 Robentex</Copyright>
-    <Description>Secure-by-default .NET 9 client library for FANUC OPC UA HMI Device Communication.</Description>
-    <PackageTags>FANUC;OPC UA;robotics;industrial automation;HMI Device Communication</PackageTags>
+    <Description>FANUC OPC UA integration SDK for .NET 9. Monitor robot and TP program status, read and write registers (R/PR), access system variables, and interact with digital I/O. Secure-by-default connections with explicit write permissions.</Description>
+    <PackageTags>FANUC;OPC UA;OPCUA;robotics;industrial automation;robot monitoring;robot integration;ROBOGUIDE;registers;HMI Device Communication</PackageTags>
     <PackageReleaseNotes>1.0.2: Adds ReadSystemVariableAsync&lt;string&gt; support for FANUC STRING system variables using a 40-register, MULTIPLY=1 dynamic SETASG mapping, low-byte-first decoding, and required NUL termination validation. Verified read-only with $RBTIF.SERIAL_NUM on ROBOGUIDE.</PackageReleaseNotes>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryType>git</RepositoryType>
+    <RepositoryUrl>https://github.com/ahmet-cakar/Robentex.Fanuc.OpcUa</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/ahmet-cakar/Robentex.Fanuc.OpcUa</PackageProjectUrl>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
   </PropertyGroup>
 
